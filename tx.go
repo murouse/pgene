@@ -168,6 +168,19 @@ func GetInTx[T any](ctx context.Context, tc TxController, handler func(context.C
 	return res, err
 }
 
+func GetInTx2[A, B any](ctx context.Context, tc TxController, handler func(context.Context) (A, B, error), opts ...TxOption) (A, B, error) {
+	var (
+		resA A
+		resB B
+	)
+	err := InTx(ctx, tc, func(ctx context.Context) error {
+		var innerErr error
+		resA, resB, innerErr = handler(ctx)
+		return innerErr
+	}, opts...)
+	return resA, resB, err
+}
+
 // extractTx extracts transaction from context.
 func extractTx(ctx context.Context) (*txWrapper, bool) {
 	tx, ok := ctx.Value(txContextKey{}).(*txWrapper)

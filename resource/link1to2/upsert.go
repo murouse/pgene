@@ -146,15 +146,15 @@ func buildUpsertConfig[TID any](opts []UpsertOption) *upsertConfig {
 
 type UpsertOption func(cfg *upsertConfig)
 
-func WithPreCheckUnset(preCheck resource.QueryFunc) UpsertOption {
+func WithPreCheckUpsert(preCheck resource.QueryFunc) UpsertOption {
 	return func(cfg *upsertConfig) {
 		cfg.preCheck = preCheck
 	}
 }
 
-func WithAfterUnset(afterUnset afterUpsertFunc) UpsertOption {
+func WithAfterUpsert(afterUpsert afterUpsertFunc) UpsertOption {
 	return func(cfg *upsertConfig) {
-		cfg.afterUpsert = afterUnset
+		cfg.afterUpsert = afterUpsert
 	}
 }
 
