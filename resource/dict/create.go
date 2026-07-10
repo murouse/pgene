@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/murouse/pgo"
-	"github.com/murouse/pgo/resource"
+	"github.com/murouse/pgene"
+	"github.com/murouse/pgene/resource"
 )
 
 type (

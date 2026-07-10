@@ -12,7 +12,7 @@ Lightweight PostgreSQL client built on top of `pgx`, providing:
 ## Installation
 
 ```bash
-go get github.com/murouse/pgo
+go get github.com/murouse/pgene
 ```
 
 ---

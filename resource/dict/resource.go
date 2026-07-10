@@ -1,7 +1,7 @@
 package dict
 
 import (
-	"github.com/murouse/pgo/resource"
+	"github.com/murouse/pgene/resource"
 )
 
 // Resource отвечает за crud над справочниками с soft-delete

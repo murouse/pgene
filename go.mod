@@ -1,4 +1,4 @@
-module github.com/murouse/pgo
+module github.com/murouse/pgene
 
 go 1.25.6
 

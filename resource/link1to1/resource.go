@@ -1,7 +1,7 @@
 package link1to1
 
 import (
-	"github.com/murouse/pgo/resource"
+	"github.com/murouse/pgene/resource"
 )
 
 // Resource отвечает за проставление/снятие связей в таблицах-связках многие ко многим hard delete

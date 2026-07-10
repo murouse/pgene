@@ -1,6 +1,6 @@
 package link1to2
 
-import "github.com/murouse/pgo/resource"
+import "github.com/murouse/pgene/resource"
 
 type Resource[TID comparable] struct {
 	db  resource.DB

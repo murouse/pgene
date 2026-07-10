@@ -5,7 +5,7 @@ import (
 
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5/pgconn"
-	"github.com/murouse/pgo"
+	"github.com/murouse/pgene"
 )
 
 type DB interface {

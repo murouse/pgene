@@ -8,8 +8,8 @@ import (
 	sq "github.com/Masterminds/squirrel"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/murouse/pgo"
-	"github.com/murouse/pgo/resource"
+	"github.com/murouse/pgene"
+	"github.com/murouse/pgene/resource"
 	"github.com/samber/lo"
 )
 

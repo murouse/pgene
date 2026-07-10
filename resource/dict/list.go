@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/murouse/pgo"
-	"github.com/murouse/pgo/resource"
+	"github.com/murouse/pgene"
+	"github.com/murouse/pgene/resource"
 )
 
 type listConfig struct {
