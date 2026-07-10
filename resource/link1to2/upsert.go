@@ -43,7 +43,7 @@ func (r *Resource[TID]) Upsert(ctx context.Context, leftID TID, rightIDs []TID, 
 	insertedRightIDs := lo.Uniq(rightIDs) // защита от дублей
 
 	// Блокируем родительскую запись
-	qbLock := pgo.Sq().
+	qbLock := pgene.Sq().
 		Select("id").
 		From(r.cfg.LeftTable).
 		Where(sq.Eq{
@@ -53,7 +53,7 @@ func (r *Resource[TID]) Upsert(ctx context.Context, leftID TID, rightIDs []TID, 
 		Suffix("FOR UPDATE")
 
 	// Очищаем связи
-	qbDelete := pgo.Sq().
+	qbDelete := pgene.Sq().
 		Delete(r.cfg.LinkTable).
 		Where(sq.Eq{r.cfg.LeftColumnID: leftID}).
 		Suffix("RETURNING " + r.cfg.RightColumnID)
@@ -72,7 +72,7 @@ func (r *Resource[TID]) Upsert(ctx context.Context, leftID TID, rightIDs []TID, 
 		r.cfg.RightColumnID,
 	)
 
-	return pgo.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
+	return pgene.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
 		var dummy TID
 		if err := r.db.Get(ctx, qbLock, &dummy); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -94,7 +94,7 @@ func (r *Resource[TID]) Upsert(ctx context.Context, leftID TID, rightIDs []TID, 
 		if len(insertedRightIDs) == 0 {
 			isModified = len(deletedRightIDs) != 0
 		} else {
-			tag, err := r.db.Exec(ctx, pgo.Sql(qInsert, leftID, insertedRightIDs))
+			tag, err := r.db.Exec(ctx, pgene.Sql(qInsert, leftID, insertedRightIDs))
 			if err != nil {
 				return false, fmt.Errorf("insert: %w", err)
 			}

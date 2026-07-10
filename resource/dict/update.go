@@ -26,7 +26,7 @@ func (r *Resource[TM, TID]) Update(ctx context.Context, id TID, data map[string]
 
 	cfg := buildUpdateConfig(opts)
 
-	qbExists := pgo.Sq().
+	qbExists := pgene.Sq().
 		Select("1").
 		From(r.cfg.Table).
 		Where(sq.Eq{
@@ -43,7 +43,7 @@ func (r *Resource[TM, TID]) Update(ctx context.Context, id TID, data map[string]
 		return sq.Expr(fmt.Sprintf("%s IS DISTINCT FROM ?", e.Key), e.Value)
 	})
 
-	qbUpdate := pgo.Sq().
+	qbUpdate := pgene.Sq().
 		Update(r.cfg.Table).
 		SetMap(data).
 		Set("updated_at", sq.Expr("now()")).
@@ -57,7 +57,7 @@ func (r *Resource[TM, TID]) Update(ctx context.Context, id TID, data map[string]
 		qbUpdate = qbUpdate.Where(cfg.compositeKey)
 	}
 
-	return pgo.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
+	return pgene.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
 		var dummy TID
 		if err := r.db.Get(ctx, qbExists, &dummy); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
@@ -72,7 +72,7 @@ func (r *Resource[TM, TID]) Update(ctx context.Context, id TID, data map[string]
 
 		res, err := r.db.Exec(ctx, qbUpdate)
 		if err != nil {
-			if cn, ok := pgo.IsDuplicateKeyError(err); ok && cn == r.cfg.UniqueIndex {
+			if cn, ok := pgene.IsDuplicateKeyError(err); ok && cn == r.cfg.UniqueIndex {
 				return false, r.cfg.AlreadyExistErr
 			}
 			return false, fmt.Errorf("update: %w", err)

@@ -21,7 +21,7 @@ func (r *Resource[TM, TID]) Get(ctx context.Context, id TID, columns []string, o
 	cfg := buildGetConfig(opts)
 	var zero TM
 
-	qb := pgo.Sq().
+	qb := pgene.Sq().
 		Select(columns...).
 		From(r.cfg.Table).
 		Where(sq.Eq{

@@ -1,4 +1,4 @@
-package pgo
+package pgene
 
 import (
 	sq "github.com/Masterminds/squirrel"

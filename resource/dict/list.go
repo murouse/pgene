@@ -35,7 +35,7 @@ func (r *Resource[TM, TID]) List(ctx context.Context, columns []string, opts ...
 		orderBy = cfg.orderBy
 	}
 
-	qb := pgo.Sq().
+	qb := pgene.Sq().
 		Select(columns...).
 		From(from).
 		Where(sq.Eq{

@@ -18,7 +18,7 @@ type deleteConfig struct {
 func (r *Resource[TM, TID]) Delete(ctx context.Context, id TID, opts ...DeleteOption) error {
 	cfg := buildDeleteConfig(opts)
 
-	qb := pgo.Sq().
+	qb := pgene.Sq().
 		Update(r.cfg.Table).
 		SetMap(sq.Eq{
 			"updated_at": sq.Expr("now()"),
@@ -33,7 +33,7 @@ func (r *Resource[TM, TID]) Delete(ctx context.Context, id TID, opts ...DeleteOp
 		qb = qb.Where(cfg.compositeKey)
 	}
 
-	return pgo.InTx(ctx, r.db, func(ctx context.Context) error {
+	return pgene.InTx(ctx, r.db, func(ctx context.Context) error {
 		if err := cfg.preCheck(ctx); err != nil {
 			return fmt.Errorf("pre check: %w", err)
 		}

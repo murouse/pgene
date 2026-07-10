@@ -18,14 +18,14 @@ type unsetConfig struct {
 func (r *Resource[TID]) Unset(ctx context.Context, leftID, rightID TID, opts ...UnsetOption) (bool, error) {
 	cfg := buildUnsetConfig(opts)
 
-	qb := pgo.Sq().
+	qb := pgene.Sq().
 		Delete(r.cfg.Table).
 		Where(sq.Eq{
 			r.cfg.LeftColumn:  leftID,
 			r.cfg.RightColumn: rightID,
 		})
 
-	return pgo.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
+	return pgene.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
 		if err := cfg.preCheck(ctx); err != nil {
 			return false, fmt.Errorf("pre check: %w", err)
 		}

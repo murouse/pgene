@@ -1,4 +1,4 @@
-package pgo
+package pgene
 
 // Meter is a placeholder for metrics/telemetry integration.
 type Meter interface{}

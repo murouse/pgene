@@ -9,11 +9,11 @@ import (
 )
 
 type DB interface {
-	pgo.TxController
+	pgene.TxController
 
-	Get(ctx context.Context, sql pgo.Sqlizer, dest any) error
-	Select(ctx context.Context, sql pgo.Sqlizer, dest any) error
-	Exec(ctx context.Context, sql pgo.Sqlizer) (pgconn.CommandTag, error)
+	Get(ctx context.Context, sql pgene.Sqlizer, dest any) error
+	Select(ctx context.Context, sql pgene.Sqlizer, dest any) error
+	Exec(ctx context.Context, sql pgene.Sqlizer) (pgconn.CommandTag, error)
 }
 
 type (

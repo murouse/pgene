@@ -33,8 +33,8 @@ go get github.com/murouse/pgene
 ```go
 ctx := context.Background()
 
-client, err := pgo.New(ctx,
-    pgo.WithConnString("postgres://user:pass@localhost:5432/db?sslmode=disable"),
+client, err := pgene.New(ctx,
+    pgene.WithConnString("postgres://user:pass@localhost:5432/db?sslmode=disable"),
 )
 if err != nil {
     log.Fatal(err)
@@ -49,13 +49,13 @@ defer client.Close()
 ### Using connection string
 
 ```go
-pgo.WithConnString("postgres://user:pass@localhost:5432/db?sslmode=disable")
+pgene.WithConnString("postgres://user:pass@localhost:5432/db?sslmode=disable")
 ```
 
 ### Using credentials
 
 ```go
-pgo.WithCreds(&pgo.Creds{
+pgene.WithCreds(&pgene.Creds{
     User: "user",
     Pass: "pass",
     Host: "localhost",
@@ -68,7 +68,7 @@ pgo.WithCreds(&pgo.Creds{
 ### Custom pool config
 
 ```go
-pgo.WithPoolConfig(&pgo.PoolConfig{
+pgene.WithPoolConfig(&pgene.PoolConfig{
     MaxConns: 10,
 })
 ```
@@ -81,7 +81,7 @@ pgo.WithPoolConfig(&pgo.PoolConfig{
 
 ```go
 _, err := client.Exec(ctx,
-    pgo.Sql("INSERT INTO users(name) VALUES($1)", "john"),
+    pgene.Sql("INSERT INTO users(name) VALUES($1)", "john"),
 )
 ```
 
@@ -91,7 +91,7 @@ _, err := client.Exec(ctx,
 var user User
 
 err := client.Get(ctx, &user,
-    pgo.Sql("SELECT * FROM users WHERE id = $1", 1),
+    pgene.Sql("SELECT * FROM users WHERE id = $1", 1),
 )
 ```
 
@@ -101,7 +101,7 @@ err := client.Get(ctx, &user,
 var users []User
 
 err := client.Select(ctx, &users,
-    pgo.Sql("SELECT * FROM users"),
+    pgene.Sql("SELECT * FROM users"),
 )
 ```
 
@@ -110,7 +110,7 @@ err := client.Select(ctx, &users,
 ## Using with squirrel
 
 ```go
-query := pgo.Sq().
+query := pgene.Sq().
     Select("id", "name").
     From("users").
     Where(sq.Eq{"id": 1})
@@ -125,9 +125,9 @@ err := client.Get(ctx, &user, query)
 ### Basic usage
 
 ```go
-err := pgo.InTx(ctx, client, func(ctx context.Context) error {
+err := pgene.InTx(ctx, client, func(ctx context.Context) error {
     if _, err := client.Exec(ctx,
-        pgo.Sql("INSERT INTO users(name) VALUES($1)", "john"),
+        pgene.Sql("INSERT INTO users(name) VALUES($1)", "john"),
     ); err != nil {
         return err
     }
@@ -143,8 +143,8 @@ err := pgo.InTx(ctx, client, func(ctx context.Context) error {
 Nested transactions are **no-op**:
 
 ```go
-pgo.InTx(ctx, client, func(ctx context.Context) error {
-    return pgo.InTx(ctx, client, func(ctx context.Context) error {
+pgene.InTx(ctx, client, func(ctx context.Context) error {
+    return pgene.InTx(ctx, client, func(ctx context.Context) error {
         // executed in the same transaction
         return nil
     })

@@ -22,19 +22,19 @@ func (r *Resource[TM, TID]) Create(ctx context.Context, data map[string]any, opt
 	cfg := buildCreateConfig[TID](opts)
 	var zero TID
 
-	qb := pgo.Sq().
+	qb := pgene.Sq().
 		Insert(r.cfg.Table).
 		SetMap(data).
 		Suffix("RETURNING id")
 
-	return pgo.GetInTx(ctx, r.db, func(ctx context.Context) (TID, error) {
+	return pgene.GetInTx(ctx, r.db, func(ctx context.Context) (TID, error) {
 		if err := cfg.preCheck(ctx); err != nil {
 			return zero, fmt.Errorf("pre check: %w", err)
 		}
 
 		var id TID
 		if err := r.db.Get(ctx, qb, &id); err != nil {
-			if cn, ok := pgo.IsDuplicateKeyError(err); ok && cn == r.cfg.UniqueIndex {
+			if cn, ok := pgene.IsDuplicateKeyError(err); ok && cn == r.cfg.UniqueIndex {
 				return zero, r.cfg.AlreadyExistErr
 			}
 			return zero, fmt.Errorf("insert: %w", err)

@@ -1,4 +1,4 @@
-package pgo
+package pgene
 
 import (
 	"context"

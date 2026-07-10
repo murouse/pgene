@@ -18,7 +18,7 @@ type setConfig struct {
 func (r *Resource[TID]) Set(ctx context.Context, leftID, rightID TID, opts ...SetOption) (bool, error) {
 	cfg := buildSetConfig(opts)
 
-	qb := pgo.Sq().
+	qb := pgene.Sq().
 		Insert(r.cfg.Table).
 		SetMap(sq.Eq{
 			r.cfg.LeftColumn:  leftID,
@@ -26,7 +26,7 @@ func (r *Resource[TID]) Set(ctx context.Context, leftID, rightID TID, opts ...Se
 		}).
 		Suffix(fmt.Sprintf("ON CONFLICT ON CONSTRAINT %s DO NOTHING", r.cfg.UniqueIndex))
 
-	return pgo.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
+	return pgene.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
 		if err := cfg.preCheck(ctx); err != nil {
 			return false, fmt.Errorf("pre check: %w", err)
 		}
@@ -45,11 +45,11 @@ func (r *Resource[TID]) Set(ctx context.Context, leftID, rightID TID, opts ...Se
 			return true, nil
 		}
 
-		if cn, ok := pgo.IsForeignKeyViolationError(err); ok && cn == r.cfg.LeftForeignKey {
+		if cn, ok := pgene.IsForeignKeyViolationError(err); ok && cn == r.cfg.LeftForeignKey {
 			return false, r.cfg.LeftNotFoundErr
 		}
 
-		if cn, ok := pgo.IsForeignKeyViolationError(err); ok && cn == r.cfg.RightForeignKey {
+		if cn, ok := pgene.IsForeignKeyViolationError(err); ok && cn == r.cfg.RightForeignKey {
 			return false, r.cfg.RightNotFoundErr
 		}
 
