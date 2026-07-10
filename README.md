@@ -1,4 +1,4 @@
-# pgo
+# pgene
 
 Lightweight PostgreSQL client built on top of `pgx`, providing:
 
