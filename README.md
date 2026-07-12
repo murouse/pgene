@@ -7,15 +7,11 @@ Lightweight PostgreSQL client built on top of `pgx`, providing:
 * integration with `squirrel` and raw SQL
 * convenient query helpers (`Exec`, `Get`, `Select`)
 
----
-
 ## Installation
 
 ```bash
 go get github.com/murouse/pgene
 ```
-
----
 
 ## Features
 
@@ -25,8 +21,6 @@ go get github.com/murouse/pgene
 * ✅ Nested transaction support (no-op)
 * ✅ Works with `squirrel` and raw SQL
 * ✅ Minimal and extensible API
-
----
 
 ## Quick Start
 
@@ -41,8 +35,6 @@ if err != nil {
 }
 defer client.Close()
 ```
-
----
 
 ## Configuration
 
@@ -72,8 +64,6 @@ pgene.WithPoolConfig(&pgene.PoolConfig{
     MaxConns: 10,
 })
 ```
-
----
 
 ## Queries
 
@@ -105,8 +95,6 @@ err := client.Select(ctx, &users,
 )
 ```
 
----
-
 ## Using with squirrel
 
 ```go
@@ -117,8 +105,6 @@ query := pgene.Sq().
 
 err := client.Get(ctx, &user, query)
 ```
-
----
 
 ## Transactions
 
@@ -136,8 +122,6 @@ err := pgene.InTx(ctx, client, func(ctx context.Context) error {
 })
 ```
 
----
-
 ### Nested transactions
 
 Nested transactions are **no-op**:
@@ -154,8 +138,6 @@ pgene.InTx(ctx, client, func(ctx context.Context) error {
 * no new transaction is created
 * errors are propagated to the outer scope
 
----
-
 ## Context-based transaction model
 
 Transactions are stored inside `context.Context`.
@@ -168,8 +150,6 @@ ctx, _ := client.BeginTx(ctx)
 client.Exec(ctx, ...)
 client.Get(ctx, ...)
 ```
-
----
 
 ## Advanced usage
 
@@ -188,8 +168,6 @@ if err := client.CommitTx(ctx); err != nil {
 }
 ```
 
----
-
 ### Access underlying pool
 
 ```go
@@ -198,16 +176,12 @@ pool := client.Pool()
 
 Use this for advanced `pgx` features.
 
----
-
 ## Design notes
 
 * Transactions are propagated via context
 * `InTx` operates on `TxController` interface for testability
 * Query abstraction is based on `Sqlizer` interface
 * Library avoids heavy abstractions and ORM patterns
-
----
 
 ## When to use
 
