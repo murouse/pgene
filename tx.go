@@ -7,17 +7,16 @@ import (
 	"log/slog"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// txContextKey is used to store transaction in context.
-type txContextKey struct{}
+// ErrNoTx is returned by CommitTx and RollbackTx when ctx holds no transaction of the client.
+var ErrNoTx = errors.New("not a transaction")
 
-// nestedTxContextKey marks nested transaction (no-op).
-type nestedTxContextKey struct{}
-
-// txWrapper wraps pgx.Tx to allow interface abstraction.
-type txWrapper struct {
-	pgx.Tx
+// txKey stores the current transaction of one pool in context,
+// so transactions of different clients never mix.
+type txKey struct {
+	pool *pgxpool.Pool
 }
 
 // TxController defines transaction lifecycle operations.
@@ -33,6 +32,7 @@ type TxOption func(o *txOptions)
 // txOptions wraps pgx.TxOptions.
 type txOptions struct {
 	pgx.TxOptions
+	nestedMode NestedMode
 }
 
 // WithIsolationLevel sets transaction isolation level.
@@ -56,43 +56,45 @@ func WithDeferrableMode(deferrableMode pgx.TxDeferrableMode) TxOption {
 	}
 }
 
-// BeginTx starts a new transaction or marks nested transaction.
-// Stores transaction in context.
-func (c *Client) BeginTx(ctx context.Context, opts ...TxOption) (context.Context, error) {
-	// если транзакция уже есть
-	if _, ok := extractTx(ctx); ok {
-		// добавляем флаг вложенности
-		return context.WithValue(ctx, nestedTxContextKey{}, struct{}{}), nil
+// WithNestedMode sets how the transaction behaves when started inside another one (NestedJoin by default).
+// Has no effect on a top-level transaction.
+func WithNestedMode(mode NestedMode) TxOption {
+	return func(o *txOptions) {
+		o.nestedMode = mode
 	}
+}
 
+// BeginTx starts a new transaction, or a nested one if ctx already holds a transaction of this client.
+// Stores transaction in context. Isolation, access and deferrable modes apply to top-level transactions only.
+func (c *Client) BeginTx(ctx context.Context, opts ...TxOption) (context.Context, error) {
 	txOpts := txOptions{}
 	for _, opt := range opts {
 		opt(&txOpts)
 	}
 
-	// иначе создаем транзакцию
-	tx, err := c.pool.BeginTx(ctx, txOpts.TxOptions)
+	var (
+		tx  txScope
+		err error
+	)
+	if outer, ok := c.tx(ctx); ok {
+		tx, err = outer.nest(ctx, txOpts.nestedMode)
+	} else {
+		tx, err = c.begin(ctx, txOpts.TxOptions)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("begin: %w", err)
+		return ctx, fmt.Errorf("begin: %w", err)
 	}
 
-	return context.WithValue(ctx, txContextKey{}, &txWrapper{tx}), nil
+	return context.WithValue(ctx, txKey{c.pool}, tx), nil
 }
 
-// CommitTx commits transaction if not nested.
+// CommitTx commits the transaction from ctx (does nothing for a joined nested one).
 func (c *Client) CommitTx(ctx context.Context) error {
-	// если нет транзакции, ошибка
-	tx, ok := extractTx(ctx)
+	tx, ok := c.tx(ctx)
 	if !ok {
-		return fmt.Errorf("not a transaction")
+		return ErrNoTx
 	}
 
-	// если вложенная транзакция, ничего не делаем
-	if _, nested := ctx.Value(nestedTxContextKey{}).(struct{}); nested {
-		return nil
-	}
-
-	// иначе коммитим
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
@@ -100,20 +102,13 @@ func (c *Client) CommitTx(ctx context.Context) error {
 	return nil
 }
 
-// RollbackTx rolls back transaction if not nested.
+// RollbackTx rolls back the transaction from ctx (does nothing for a joined nested one).
 func (c *Client) RollbackTx(ctx context.Context) error {
-	// если нет транзакции, ошибка
-	tx, ok := extractTx(ctx)
+	tx, ok := c.tx(ctx)
 	if !ok {
-		return fmt.Errorf("not a transaction")
+		return ErrNoTx
 	}
 
-	// если вложенная транзакция, ничего не делаем
-	if _, nested := ctx.Value(nestedTxContextKey{}).(struct{}); nested {
-		return nil
-	}
-
-	// иначе роллбэчим
 	if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
 		return fmt.Errorf("rollback: %w", err)
 	}
@@ -122,12 +117,12 @@ func (c *Client) RollbackTx(ctx context.Context) error {
 }
 
 // InTx executes handler within transaction.
-// Handles begin/commit/rollback automatically.
-// Nested transactions are treated as no-op.
+// Handles begin/commit/rollback automatically; handler error is returned as is.
+// Nested transactions follow WithNestedMode.
 func InTx(ctx context.Context, tc TxController, handler func(context.Context) error, opts ...TxOption) (err error) {
 	ctx, err = tc.BeginTx(ctx, opts...)
 	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+		return err
 	}
 
 	defer func() {
@@ -146,14 +141,10 @@ func InTx(ctx context.Context, tc TxController, handler func(context.Context) er
 	}()
 
 	if err = handler(ctx); err != nil {
-		return fmt.Errorf("handler tx: %w", err)
+		return err
 	}
 
-	if err = tc.CommitTx(ctx); err != nil {
-		return fmt.Errorf("commit tx: %w", err)
-	}
-
-	return nil
+	return tc.CommitTx(ctx)
 }
 
 // GetInTx is a generic version of InTx that returns a value from handler.
@@ -181,8 +172,17 @@ func GetInTx2[A, B any](ctx context.Context, tc TxController, handler func(conte
 	return resA, resB, err
 }
 
-// extractTx extracts transaction from context.
-func extractTx(ctx context.Context) (*txWrapper, bool) {
-	tx, ok := ctx.Value(txContextKey{}).(*txWrapper)
+// begin starts a top-level transaction that runs its hooks right after commit.
+func (c *Client) begin(ctx context.Context, opts pgx.TxOptions) (txScope, error) {
+	tx, err := c.pool.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &hookedTx{Tx: tx, parent: runNow{}}, nil
+}
+
+// tx extracts the client's transaction from context.
+func (c *Client) tx(ctx context.Context) (txScope, bool) {
+	tx, ok := ctx.Value(txKey{c.pool}).(txScope)
 	return tx, ok
 }

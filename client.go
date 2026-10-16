@@ -16,8 +16,6 @@ type Client struct {
 // Validates config, initializes pgx pool and optionally pings DB.
 func New(ctx context.Context, opts ...Option) (*Client, error) {
 	cfg := &config{
-		conn:        defaultConnConfig(),
-		pool:        defaultPoolConfig(),
 		constructor: defaultConstructorConfig(),
 		logger:      &noopLogger{},
 		meter:       &noopMeter{},
@@ -27,27 +25,18 @@ func New(ctx context.Context, opts ...Option) (*Client, error) {
 		opt(cfg)
 	}
 
-	if cfg.conn.ConnString == "" {
+	if cfg.connString == "" {
 		return nil, fmt.Errorf("connection string is required")
 	}
 
-	poolConfig, err := pgxpool.ParseConfig(cfg.conn.ConnString)
+	poolConfig, err := pgxpool.ParseConfig(cfg.connString)
 	if err != nil {
 		return nil, fmt.Errorf("parse pool config: %w", err)
 	}
 
-	// apply conn settings
-	poolConfig.ConnConfig.StatementCacheCapacity = cfg.conn.StatementCacheCapacity
-	poolConfig.ConnConfig.DescriptionCacheCapacity = cfg.conn.DescriptionCacheCapacity
-	poolConfig.ConnConfig.DefaultQueryExecMode = cfg.conn.DefaultQueryExecMode
-
-	// apply pool settings
-	poolConfig.MaxConns = cfg.pool.MaxConns
-	poolConfig.MinConns = cfg.pool.MinConns
-	poolConfig.MinIdleConns = cfg.pool.MinIdleConns
-	poolConfig.MaxConnLifetime = cfg.pool.MaxConnLifetime
-	poolConfig.MaxConnIdleTime = cfg.pool.MaxConnIdleTime
-	poolConfig.HealthCheckPeriod = cfg.pool.HealthCheckPeriod
+	for _, configure := range cfg.pgxConfig {
+		configure(poolConfig)
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {

@@ -1,0 +1,36 @@
+version: '3'
+
+vars:
+  LOCAL_BIN:
+    sh: echo '$(realpath)/bin'
+
+tasks:
+  tool:install:
+    cmds:
+      - GOBIN={{.LOCAL_BIN}} go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.8.0
+
+  test:
+    cmds:
+      - go test -race ./...
+
+  # Интеграционные тесты на временном PostgreSQL в Docker
+  test:integration:
+    vars:
+      PG_IMAGE: postgres:16.2-alpine3.19
+      PG_CONTAINER: pgene-test-pg
+      PG_PORT: 55432
+    cmds:
+      - docker run -d --rm --name {{.PG_CONTAINER}} -p {{.PG_PORT}}:5432 -e POSTGRES_USER=pgene -e POSTGRES_PASSWORD=pgene -e POSTGRES_DB=pgene {{.PG_IMAGE}}
+      - defer: docker stop {{.PG_CONTAINER}}
+      # по TCP: во время инициализации образа сервер слушает только unix-сокет
+      - until docker exec {{.PG_CONTAINER}} pg_isready -q -h 127.0.0.1 -U pgene -d pgene; do sleep 1; done
+      - PGENE_TEST_DSN="postgres://pgene:pgene@localhost:{{.PG_PORT}}/pgene?sslmode=disable" go test -race -count=1 ./...
+
+  lint:
+    cmds:
+      - PATH={{.LOCAL_BIN}}:{{.PATH}} golangci-lint run --config=.golangci.yml
+
+  # Линтинг с исправлениями
+  lint:fix:
+    cmds:
+      - PATH={{.LOCAL_BIN}}:{{.PATH}} golangci-lint run --fix --config=.golangci.yml

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/georgysavva/scany/v2/pgxscan"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -12,9 +13,10 @@ type Sqlizer interface {
 	ToSql() (string, []any, error)
 }
 
-// executor abstracts Exec method for pool and transaction.
-type executor interface {
+// querier abstracts query methods shared by pool and transaction.
+type querier interface {
 	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 }
 
 // Exec executes a query (INSERT/UPDATE/DELETE).
@@ -25,17 +27,7 @@ func (c *Client) Exec(ctx context.Context, sql Sqlizer) (pgconn.CommandTag, erro
 		return pgconn.CommandTag{}, err
 	}
 
-	ex := executor(c.pool)
-	if tx, ok := extractTx(ctx); ok {
-		ex = tx
-	}
-
-	tag, err := ex.Exec(ctx, query, args...)
-	if err != nil {
-		return pgconn.CommandTag{}, err
-	}
-
-	return tag, nil
+	return c.querier(ctx).Exec(ctx, query, args...)
 }
 
 // Select executes a query and scans multiple rows into dest.
@@ -46,12 +38,7 @@ func (c *Client) Select(ctx context.Context, sql Sqlizer, dest any) error {
 		return err
 	}
 
-	qr := pgxscan.Querier(c.pool)
-	if tx, ok := extractTx(ctx); ok {
-		qr = tx
-	}
-
-	return pgxscan.Select(ctx, qr, dest, query, args...)
+	return pgxscan.Select(ctx, c.querier(ctx), dest, query, args...)
 }
 
 // Get executes a query and scans a single row into dest.
@@ -62,10 +49,13 @@ func (c *Client) Get(ctx context.Context, sql Sqlizer, dest any) error {
 		return err
 	}
 
-	qr := pgxscan.Querier(c.pool)
-	if tx, ok := extractTx(ctx); ok {
-		qr = tx
-	}
+	return pgxscan.Get(ctx, c.querier(ctx), dest, query, args...)
+}
 
-	return pgxscan.Get(ctx, qr, dest, query, args...)
+// querier returns the client's transaction from context, or the pool if there is none.
+func (c *Client) querier(ctx context.Context) querier {
+	if tx, ok := c.tx(ctx); ok {
+		return tx
+	}
+	return c.pool
 }

@@ -5,34 +5,23 @@ import (
 	"errors"
 	"fmt"
 
-	sq "github.com/Masterminds/squirrel"
 	"github.com/jackc/pgx/v5"
 	"github.com/murouse/pgene"
-	"github.com/murouse/pgene/resource"
 )
 
-type getConfig struct {
-	extendBuilder resource.ExtendBuilderFunc
-}
-
 // Get возвращает одну активную запись по её ID (где deleted_at IS NULL).
-// Если запись не найдена, возвращает r.cfg.NotFoundErr.
-func (r *Resource[TM, TID]) Get(ctx context.Context, id TID, columns []string, opts ...GetOption) (TM, error) {
-	cfg := buildGetConfig(opts)
-	var zero TM
+// Если запись не найдена, возвращает Config.NotFoundErr.
+func (r *Resource[TM, TID]) Get(ctx context.Context, id TID, columns []string, opts ...Option) (TM, error) {
+	o := buildOptions(opts)
 
-	qb := pgene.Sq().
+	qb := o.extendSelect(pgene.Sq().
 		Select(columns...).
 		From(r.cfg.Table).
-		Where(sq.Eq{
-			"id":         id,
-			"deleted_at": nil,
-		})
-
-	qb = cfg.extendBuilder(qb)
+		Where(r.filter(id, o)))
 
 	var item TM
 	if err := r.db.Get(ctx, qb, &item); err != nil {
+		var zero TM
 		if errors.Is(err, pgx.ErrNoRows) {
 			return zero, r.cfg.NotFoundErr
 		}
@@ -40,25 +29,4 @@ func (r *Resource[TM, TID]) Get(ctx context.Context, id TID, columns []string, o
 	}
 
 	return item, nil
-}
-
-func buildGetConfig(opts []GetOption) *getConfig {
-	cfg := &getConfig{
-		extendBuilder: func(b sq.SelectBuilder) sq.SelectBuilder { return b },
-	}
-
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	return cfg
-}
-
-type GetOption func(cfg *getConfig)
-
-// WithGetExtendBuilder позволяет кастомизировать SQL-запрос (например, добавить JOIN или блокировку FOR SHARE)
-func WithGetExtendBuilder(extendBuilder resource.ExtendBuilderFunc) GetOption {
-	return func(cfg *getConfig) {
-		cfg.extendBuilder = extendBuilder
-	}
 }

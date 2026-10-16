@@ -1,0 +1,38 @@
+version: "2"
+
+linters:
+  # Помимо стандартного набора (errcheck, govet, ineffassign, staticcheck, unused).
+  enable:
+    - bodyclose # незакрытые тела HTTP-ответов
+    - errorlint # сравнение ошибок без errors.Is/As и обертка без %w
+    - gosec     # уязвимости, в том числе HTTP-серверы без таймаутов (G112)
+    - noctx     # HTTP-запросы и сетевые вызовы без контекста
+
+  settings:
+    staticcheck:
+      # Все проверки, включая именование (ST1003: HTTP, GRPC, ID), кроме требований к doc-комментариям.
+      checks:
+        - all
+        - -ST1000
+        - -ST1020
+        - -ST1021
+        - -ST1022
+
+  exclusions:
+    # cmd/ в .gitignore — локальная песочница.
+    paths:
+      - cmd
+    rules:
+      # В тестах допустимы самоподписанные сертификаты и запросы к локальным адресам.
+      - path: _test\.go
+        linters:
+          - gosec
+      # ToSql — метод squirrel.Sqlizer, Sql — публичный API: переименование сломает совместимость.
+      - linters:
+          - staticcheck
+        text: "ST1003: (method ToSql should be ToSQL|func Sql should be SQL)"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

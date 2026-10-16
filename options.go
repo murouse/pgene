@@ -1,6 +1,12 @@
 package pgene
 
-import "fmt"
+import (
+	"net"
+	"net/url"
+	"strconv"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
 
 // Option configures Client during initialization.
 type Option func(*config)
@@ -8,36 +14,29 @@ type Option func(*config)
 // WithConnString sets raw connection string.
 func WithConnString(connString string) Option {
 	return func(c *config) {
-		c.conn.ConnString = connString
+		c.connString = connString
 	}
 }
 
-// WithCreds builds connection string from credentials.
+// WithCreds builds connection string from credentials, escaping special characters.
 func WithCreds(creds *Creds) Option {
 	return func(c *config) {
-		c.conn.ConnString = fmt.Sprintf(
-			"postgres://%s:%s@%s:%d/%s?sslmode=%s",
-			creds.User,
-			creds.Pass,
-			creds.Host,
-			creds.Port,
-			creds.DB,
-			creds.SSLMode,
-		)
+		dsn := url.URL{
+			Scheme:   "postgres",
+			User:     url.UserPassword(creds.User, creds.Pass),
+			Host:     net.JoinHostPort(creds.Host, strconv.Itoa(creds.Port)),
+			Path:     creds.DB,
+			RawQuery: url.Values{"sslmode": {creds.SSLMode}}.Encode(),
+		}
+		c.connString = dsn.String()
 	}
 }
 
-// WithConnConfig overrides connection config.
-func WithConnConfig(connConfig *ConnConfig) Option {
+// WithPgxConfig adjusts pgx pool config parsed from the connection string,
+// e.g. to set MaxConns or a query tracer. Fields not touched keep values from the DSN or pgx defaults.
+func WithPgxConfig(configure func(*pgxpool.Config)) Option {
 	return func(c *config) {
-		c.conn = connConfig
-	}
-}
-
-// WithPoolConfig overrides pool config.
-func WithPoolConfig(poolConfig *PoolConfig) Option {
-	return func(c *config) {
-		c.pool = poolConfig
+		c.pgxConfig = append(c.pgxConfig, configure)
 	}
 }
 

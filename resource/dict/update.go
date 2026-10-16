@@ -2,120 +2,64 @@ package dict
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	sq "github.com/Masterminds/squirrel"
-	"github.com/jackc/pgx/v5"
 	"github.com/murouse/pgene"
-	"github.com/murouse/pgene/resource"
-	"github.com/samber/lo"
 )
 
-type updateConfig struct {
-	preCheck     resource.QueryFunc
-	afterUpdate  resource.QueryFunc
-	compositeKey map[string]any
-}
+// Update обновляет поля записи по ID и возвращает true, если значения действительно изменились.
+// Если ни одно значение не отличается от текущего, запись (и её updated_at) не трогается.
+// Если записи нет, возвращает Config.NotFoundErr.
+//
+// Колонки типа json (не jsonb) не поддерживаются: в PostgreSQL для json нет оператора сравнения.
+func (r *Resource[TM, TID]) Update(ctx context.Context, id TID, data map[string]any, opts ...Option) (bool, error) {
+	filter := r.filter(id, buildOptions(opts))
+	set := quoteKeys(data)
 
-// Update обновляет поля записи по ID, если новые значения отличаются от существующих.
-func (r *Resource[TM, TID]) Update(ctx context.Context, id TID, data map[string]any, opts ...UpdateOption) (bool, error) {
-	if len(data) == 0 {
-		return false, nil
+	// колонки в фиксированном порядке: один текст запроса — один prepared statement
+	changes := make(sq.Or, 0, len(set))
+	for _, col := range slices.Sorted(maps.Keys(set)) {
+		changes = append(changes, sq.Expr(col+" IS DISTINCT FROM ?", set[col]))
 	}
 
-	cfg := buildUpdateConfig(opts)
+	qb := pgene.Sq().
+		Update(r.cfg.Table).
+		SetMap(set).
+		Set("updated_at", sq.Expr("now()")).
+		Where(filter).
+		Where(changes)
 
-	qbExists := pgene.Sq().
+	tag, err := r.db.Exec(ctx, qb)
+	if err != nil {
+		return false, r.wrap("update", err)
+	}
+	if tag.RowsAffected() > 0 {
+		return true, nil
+	}
+
+	// ничего не обновили: либо записи нет, либо значения те же
+	return false, r.ensureExists(ctx, filter)
+}
+
+// ensureExists возвращает Config.NotFoundErr, если под filter нет записи.
+func (r *Resource[TM, TID]) ensureExists(ctx context.Context, filter sq.Sqlizer) error {
+	qb := pgene.Sq().
 		Select("1").
 		From(r.cfg.Table).
-		Where(sq.Eq{
-			"id":         id,
-			"deleted_at": nil,
-		}).
-		Suffix("FOR UPDATE")
+		Where(filter).
+		Prefix("SELECT EXISTS (").
+		Suffix(")")
 
-	if len(cfg.compositeKey) > 0 {
-		qbExists = qbExists.Where(cfg.compositeKey)
+	var exists bool
+	if err := r.db.Get(ctx, qb, &exists); err != nil {
+		return fmt.Errorf("check exists: %w", err)
+	}
+	if !exists {
+		return r.cfg.NotFoundErr
 	}
 
-	changes := lo.Map(lo.Entries(data), func(e lo.Entry[string, any], _ int) sq.Sqlizer {
-		return sq.Expr(fmt.Sprintf("%s IS DISTINCT FROM ?", e.Key), e.Value)
-	})
-
-	qbUpdate := pgene.Sq().
-		Update(r.cfg.Table).
-		SetMap(data).
-		Set("updated_at", sq.Expr("now()")).
-		Where(sq.Eq{
-			"id":         id,
-			"deleted_at": nil,
-		}).
-		Where(sq.Or(changes))
-
-	if len(cfg.compositeKey) > 0 {
-		qbUpdate = qbUpdate.Where(cfg.compositeKey)
-	}
-
-	return pgene.GetInTx(ctx, r.db, func(ctx context.Context) (bool, error) {
-		var dummy TID
-		if err := r.db.Get(ctx, qbExists, &dummy); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				return false, r.cfg.NotFoundErr
-			}
-			return false, fmt.Errorf("check exists: %w", err)
-		}
-
-		if err := cfg.preCheck(ctx); err != nil {
-			return false, fmt.Errorf("pre check: %w", err)
-		}
-
-		res, err := r.db.Exec(ctx, qbUpdate)
-		if err != nil {
-			if cn, ok := pgene.IsDuplicateKeyError(err); ok && cn == r.cfg.UniqueIndex {
-				return false, r.cfg.AlreadyExistErr
-			}
-			return false, fmt.Errorf("update: %w", err)
-		}
-
-		if err = cfg.afterUpdate(ctx); err != nil {
-			return false, fmt.Errorf("after update: %w", err)
-		}
-
-		return res.RowsAffected() > 0, nil
-	})
-}
-
-func buildUpdateConfig(opts []UpdateOption) *updateConfig {
-	cfg := &updateConfig{
-		preCheck:     func(_ context.Context) error { return nil },
-		afterUpdate:  func(_ context.Context) error { return nil },
-		compositeKey: nil,
-	}
-
-	for _, opt := range opts {
-		opt(cfg)
-	}
-
-	return cfg
-}
-
-type UpdateOption func(cfg *updateConfig)
-
-func WithUpdatePreCheck(preCheck resource.QueryFunc) UpdateOption {
-	return func(cfg *updateConfig) {
-		cfg.preCheck = preCheck
-	}
-}
-
-func WithAfterUpdate(afterUpdate resource.QueryFunc) UpdateOption {
-	return func(cfg *updateConfig) {
-		cfg.afterUpdate = afterUpdate
-	}
-}
-
-func WithUpdateCompositeKey(compositeKey map[string]any) UpdateOption {
-	return func(cfg *updateConfig) {
-		cfg.compositeKey = compositeKey
-	}
+	return nil
 }
